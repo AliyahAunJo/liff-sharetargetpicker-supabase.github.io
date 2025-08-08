@@ -677,7 +677,7 @@
         });
       }
 
-      function saveToSupabase() {
+      async function saveToSupabase(retryCount = 0, maxRetries = 3) {
         if (!profile || !profile.userId) {
           Swal.fire({
             icon: "error",
@@ -706,7 +706,7 @@
           Swal.fire({
             icon: "error",
             title: "JSON ไม่ถูกต้อง",
-            text: "กรุณาตรวจสอบ JSON Flex Message ของคุณ: " + error.message,
+            text: `กรุณาตรวจสอบ JSON Flex Message ของคุณ: ${error.message}`,
           });
           return;
         }
@@ -724,44 +724,51 @@
           },
         });
         console.log("Saving data:", data);
-        fetch(SUPABASE_FUNCTIONS_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        })
-          .then((response) => {
-            if (!response.ok) {
-              return response.text().then((text) => {
-                throw new Error(`Network response was not ok: ${response.status} ${text}`);
-              });
+        try {
+          const response = await fetch(SUPABASE_FUNCTIONS_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+          });
+          if (!response.ok) {
+            const text = await response.text();
+            let errorMessage = `Network response was not ok: ${response.status}`;
+            if (response.status === 400) {
+              errorMessage = `Invalid request: ${text}`;
+            } else if (response.status === 500) {
+              errorMessage = `Server error: ${text}`;
             }
-            return response.json();
-          })
-          .then((result) => {
-            console.log("Save response:", result);
-            if (result.success) {
-              Swal.fire({
-                icon: "success",
-                title: "บันทึกข้อมูลเรียบร้อย!",
-                timer: 1500,
-                showConfirmButton: false,
-              });
-              clearInputs();
-              fetchDataList();
-            } else {
-              throw new Error(result.error || "Unknown error occurred");
-            }
-          })
-          .catch((error) => {
-            console.error("Error saving data:", error);
+            throw new Error(errorMessage);
+          }
+          const result = await response.json();
+          console.log("Save response:", result);
+          if (result.success) {
+            Swal.fire({
+              icon: "success",
+              title: "บันทึกข้อมูลเรียบร้อย!",
+              timer: 1500,
+              showConfirmButton: false,
+            });
+            clearInputs();
+            fetchDataList();
+          } else {
+            throw new Error(result.error || "Unknown error occurred");
+          }
+        } catch (error) {
+          console.error("Error saving data:", error);
+          if (retryCount < maxRetries) {
+            console.log(`Retrying saveToSupabase (${retryCount + 1}/${maxRetries})...`);
+            setTimeout(() => saveToSupabase(retryCount + 1, maxRetries), 1000);
+          } else {
             Swal.fire({
               icon: "error",
               title: "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
               text: error.message,
             });
-          });
+          }
+        }
       }
 
       async function fetchDataList(retryCount = 0, maxRetries = 3) {
@@ -779,7 +786,13 @@
           });
           if (!response.ok) {
             const text = await response.text();
-            throw new Error(`Network response was not ok: ${response.status} ${text}`);
+            let errorMessage = `Network response was not ok: ${response.status}`;
+            if (response.status === 400) {
+              errorMessage = `Invalid request: ${text}`;
+            } else if (response.status === 500) {
+              errorMessage = `Server error: ${text}`;
+            }
+            throw new Error(errorMessage);
           }
           const data = await response.json();
           console.log("Fetched data:", data);
@@ -829,13 +842,25 @@
         }
       }
 
-      function showFlexMessage(id) {
+      async function showFlexMessage(id, retryCount = 0, maxRetries = 1) {
         console.log("Showing Flex Message for id:", id, "listData:", window.listData);
         if (!window.listData || !Array.isArray(window.listData)) {
           console.warn("listData is not initialized, attempting to fetch...");
-          fetchDataList().then(() => {
-            showFlexMessage(id); // Retry after fetching
-          });
+          if (retryCount < maxRetries) {
+            await fetchDataList();
+            showFlexMessage(id, retryCount + 1, maxRetries);
+          } else {
+            Swal.fire({
+              icon: "error",
+              title: "ไม่สามารถโหลดข้อมูลได้",
+              text: "ไม่สามารถโหลดรายการข้อมูล กรุณารีเฟรชหน้าเว็บ",
+              confirmButtonText: "รีเฟรช",
+            }).then((result) => {
+              if (result.isConfirmed) {
+                fetchDataList();
+              }
+            });
+          }
           return;
         }
         const item = window.listData.find(item => String(item.id) === String(id));
@@ -913,29 +938,46 @@
         }
       }
 
-      function deleteItemFromServer(id) {
+      async function deleteItemFromServer(id, retryCount = 0, maxRetries = 3) {
+        if (!profile || !profile.userId) {
+          throw new Error("โปรไฟล์ยังไม่โหลด");
+        }
         console.log("Deleting item with id:", id);
-        return fetch(`${SUPABASE_FUNCTIONS_URL}?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(profile.userId)}`, {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        })
-          .then((response) => {
-            if (!response.ok) {
-              return response.text().then((text) => {
-                throw new Error(`Network response was not ok: ${response.status} ${text}`);
-              });
-            }
-            return response.json();
-          })
-          .then((data) => {
-            console.log("Delete response:", data);
-            if (!data.success) {
-              throw new Error(data.error || "Unknown error occurred");
-            }
-            return data;
+        try {
+          const response = await fetch(`${SUPABASE_FUNCTIONS_URL}?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(profile.userId)}`, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
           });
+          if (!response.ok) {
+            const text = await response.text();
+            let errorMessage = `Network response was not ok: ${response.status}`;
+            if (response.status === 400) {
+              errorMessage = `Invalid request: ${text}`;
+            } else if (response.status === 403) {
+              errorMessage = `Unauthorized: ${text}`;
+            } else if (response.status === 404) {
+              errorMessage = `Item not found: ${text}`;
+            } else if (response.status === 500) {
+              errorMessage = `Server error: ${text}`;
+            }
+            throw new Error(errorMessage);
+          }
+          const data = await response.json();
+          console.log("Delete response:", data);
+          if (!data.success) {
+            throw new Error(data.error || "Unknown error occurred");
+          }
+          return data;
+        } catch (error) {
+          if (retryCount < maxRetries) {
+            console.log(`Retrying deleteItemFromServer (${retryCount + 1}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return deleteItemFromServer(id, retryCount + 1, maxRetries);
+          }
+          throw error;
+        }
       }
 
       function deleteListItem(id) {
@@ -987,13 +1029,25 @@
           .replace(/'/g, "&#039;");
       }
 
-      function shareListItem(id) {
+      async function shareListItem(id, retryCount = 0, maxRetries = 1) {
         console.log("Sharing item with id:", id);
         if (!window.listData || !Array.isArray(window.listData)) {
           console.warn("listData is not initialized, attempting to fetch...");
-          fetchDataList().then(() => {
-            shareListItem(id); // Retry after fetching
-          });
+          if (retryCount < maxRetries) {
+            await fetchDataList();
+            shareListItem(id, retryCount + 1, maxRetries);
+          } else {
+            Swal.fire({
+              icon: "error",
+              title: "ไม่สามารถโหลดข้อมูลได้",
+              text: "ไม่สามารถโหลดรายการข้อมูล กรุณารีเฟรชหน้าเว็บ",
+              confirmButtonText: "รีเฟรช",
+            }).then((result) => {
+              if (result.isConfirmed) {
+                fetchDataList();
+              }
+            });
+          }
           return;
         }
         const item = window.listData.find(item => String(item.id) === String(id));
