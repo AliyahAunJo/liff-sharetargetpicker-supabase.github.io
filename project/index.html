@@ -247,7 +247,9 @@
     <script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script>
     <script>
       const liffId = "2005780370-YvW3r1L7";
+      const SUPABASE_FUNCTIONS_URL = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/flex-handler';
       let profile;
+
       liff
         .init({ liffId })
         .then(() => {
@@ -255,42 +257,28 @@
             liff.getProfile().then((p) => {
               profile = p;
               document.getElementById("pictureUrl").src = profile.pictureUrl;
-              document.getElementById(
-                "displayName"
-              ).textContent = `สวัสดี: ${profile.displayName}`;
-            });
+              document.getElementById("displayName").textContent = `สวัสดี: ${profile.displayName}`;
+              fetchDataList();
+            }).catch(console.error);
           } else {
             liff.login();
           }
         })
         .catch(console.error);
 
-      // กำหนด URL สำหรับ Supabase Edge Functions (แทนที่ด้วย Project URL ของคุณ)
-      const SUPABASE_FUNCTIONS_URL = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/submit-liff-shartargetpicker'; // แทนที่ your-project-ref ด้วย ref จริงจาก Supabase dashboard
-      const SAVE_FUNCTION = SUPABASE_FUNCTIONS_URL + 'save-flex';
-      const LIST_FUNCTION = SUPABASE_FUNCTIONS_URL + 'list-flex';
-      const DELETE_FUNCTION = SUPABASE_FUNCTIONS_URL + 'delete-flex';
-
-      // Supabase API Key (Anon key สำหรับ client-side calls ถ้าจำเป็น แต่ที่นี่เราใช้ Edge Functions เพื่อ security)
-      const SUPABASE_ANON_KEY = 'your-anon-key-here'; // แทนที่ด้วย anon key จาก Supabase > Settings > API
-
       function toggleMessageDisplay(elementId) {
         const element = document.getElementById(elementId);
-        if (element.style.display === "none") {
-          element.style.display = "block";
-        } else {
-          element.style.display = "none";
-        }
+        element.style.display = element.style.display === "none" ? "block" : "none";
       }
+
       function showImage() {
         const src = document.getElementById("textBox2").value;
-        document.getElementById(
-          "flex1"
-        ).innerHTML = `<img src="${src}" alt="Shared Image">`;
+        document.getElementById("flex1").innerHTML = `<img src="${src}" alt="Shared Image">`;
       }
+
       function showFlex() {
         const flexContainer = document.getElementById("flex1");
-        flexContainer.innerHTML = ""; // ล้างเนื้อหาเดิม
+        flexContainer.innerHTML = "";
         try {
           const flexJson = document.getElementById("textBox2").value;
           const flexObject = JSON.parse(flexJson);
@@ -303,19 +291,19 @@
             flex2html("flex1", flexMessage);
           } else {
             console.error("flex2html function is not available");
-            flexContainer.innerHTML =
-              '<p class="text-danger">flex2html library is not loaded properly.</p>';
+            flexContainer.innerHTML = '<p class="text-danger">flex2html library is not loaded properly.</p>';
           }
         } catch (error) {
           console.error("Error parsing Flex JSON:", error);
-          flexContainer.innerHTML =
-            '<p class="text-danger">Invalid Flex JSON. Please check your input.</p>';
+          flexContainer.innerHTML = '<p class="text-danger">Invalid Flex JSON. Please check your input.</p>';
         }
       }
+
       function showText() {
         const showTextElement = document.getElementById("showtext");
         showTextElement.textContent = document.getElementById("textBox2").value;
       }
+
       function clearText() {
         Swal.fire({
           title: "คุณแน่ใจหรือไม่?",
@@ -328,23 +316,17 @@
           cancelButtonText: "ยกเลิก",
         }).then((result) => {
           if (result.isConfirmed) {
-            // ล้างข้อความใน textboxes
             document.getElementById("textBox1").value = "";
             document.getElementById("textBox2").value = "";
-            // ล้างการแสดงผลใน flex1 และ showtext ด้วย
             document.getElementById("flex1").innerHTML = "";
             document.getElementById("showtext").textContent = "";
-            // ซ่อน elements แทนที่จะล้างเนื้อหา
             document.getElementById("flex1").style.display = "none";
             document.getElementById("showtext").style.display = "none";
-            Swal.fire(
-              "ล้างข้อความแล้ว!",
-              "ข้อความทั้งหมดถูกล้างและซ่อนเรียบร้อยแล้ว",
-              "success"
-            );
+            Swal.fire("ล้างข้อความแล้ว!", "ข้อความทั้งหมดถูกล้างและซ่อนเรียบร้อยแล้ว", "success");
           }
         });
       }
+
       function sendImage() {
         const originalContentUrl = document.getElementById("textBox1").value;
         const previewImageUrl = document.getElementById("textBox2").value;
@@ -354,6 +336,7 @@
           previewImageUrl,
         });
       }
+
       function sendFlex() {
         const altText = document.getElementById("textBox1").value;
         let contents;
@@ -368,7 +351,6 @@
           });
           return;
         }
-        // Validate the Flex message structure
         if (!isValidFlexMessage(contents)) {
           Swal.fire({
             icon: "error",
@@ -377,13 +359,11 @@
           });
           return;
         }
-        // Prepare the message object
         const messageObj = {
           type: "flex",
           altText: altText || "Flex Message",
           contents: contents,
         };
-        // Send the message
         if (liff.isApiAvailable("shareTargetPicker")) {
           liff
             .shareTargetPicker([messageObj])
@@ -411,7 +391,7 @@
           });
         }
       }
-      // Helper function to validate Flex Message structure
+
       function isValidFlexMessage(obj) {
         return (
           obj &&
@@ -420,12 +400,14 @@
             (obj.type === "flex" && obj.contents))
         );
       }
+
       function sendText() {
         sendMessage({
           type: "text",
           text: document.getElementById("textBox2").value,
         });
       }
+
       function getLocation() {
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(showPosition, showError);
@@ -437,6 +419,7 @@
           });
         }
       }
+
       function showPosition(position) {
         const latitude = position.coords.latitude;
         const longitude = position.coords.longitude;
@@ -450,6 +433,7 @@
           showConfirmButton: false,
         });
       }
+
       function showError(error) {
         let errorMessage;
         switch (error.code) {
@@ -472,6 +456,7 @@
           text: errorMessage,
         });
       }
+
       function showVideo() {
         const videoUrl = document.getElementById("textBox1").value;
         const previewImageUrl = document.getElementById("textBox2").value;
@@ -491,6 +476,7 @@
           </video>
         `;
       }
+
       function sendVideo() {
         const originalContentUrl = document.getElementById("textBox1").value;
         const previewImageUrl = document.getElementById("textBox2").value;
@@ -516,6 +502,7 @@
           previewImageUrl: previewImageUrl,
         });
       }
+
       function sendLocation() {
         const latitude = document.getElementById("textBox1").value;
         const longitude = document.getElementById("textBox2").value;
@@ -535,10 +522,10 @@
           longitude: parseFloat(longitude),
         });
       }
+
       async function scanQrCode() {
         const qrReader = document.getElementById("qr-reader");
         if (liff.isInClient()) {
-          // สำหรับ LINE app
           try {
             const result = await liff.scanCodeV2();
             document.getElementById("textBox2").value = result.value;
@@ -547,48 +534,41 @@
             showScanError(error);
           }
         } else {
-          // สำหรับเว็บบราวเซอร์
           qrReader.innerHTML = `
-      <div>
-        <p class="text-white" style="font-weight:bold; font-size:1rem;">เลือกวิธีสแกน QR Code:</p>
-        <button id="cameraBtn" class="btn btn-primary">ใช้กล้อง</button>
-        <input type="file" id="fileInput" accept="image/*" style="display: none;">
-        <button id="fileBtn" class="btn btn-secondary">อัปโหลดรูปภาพ</button>
-      </div>
-      <div id="qrScannerContainer"></div>
-    `;
+            <div>
+              <p class="text-white" style="font-weight:bold; font-size:1rem;">เลือกวิธีสแกน QR Code:</p>
+              <button id="cameraBtn" class="btn btn-primary">ใช้กล้อง</button>
+              <input type="file" id="fileInput" accept="image/*" style="display: none;">
+              <button id="fileBtn" class="btn btn-secondary">อัปโหลดรูปภาพ</button>
+            </div>
+            <div id="qrScannerContainer"></div>
+          `;
           document.getElementById("cameraBtn").onclick = startCameraScanner;
-          document.getElementById("fileBtn").onclick = () =>
-            document.getElementById("fileInput").click();
+          document.getElementById("fileBtn").onclick = () => document.getElementById("fileInput").click();
           document.getElementById("fileInput").onchange = handleFileUpload;
           qrReader.style.display = "block";
         }
       }
+
       let scanner = null;
       function startCameraScanner() {
-        const qrScannerContainer =
-          document.getElementById("qrScannerContainer");
-        qrScannerContainer.innerHTML = ""; // Clear previous content
+        const qrScannerContainer = document.getElementById("qrScannerContainer");
+        qrScannerContainer.innerHTML = "";
         scanner = new Html5Qrcode("qrScannerContainer");
         const config = { fps: 10, qrbox: { width: 250, height: 250 } };
         scanner
-          .start(
-            { facingMode: "environment" },
-            config,
-            onScanSuccess,
-            onScanError
-          )
+          .start({ facingMode: "environment" }, config, onScanSuccess, onScanError)
           .catch((error) => {
             console.error("Error starting scanner:", error);
             showCameraAccessInstructions();
           });
-        // เพิ่มปุ่มปิดสแกนเนอร์
         const closeButton = document.createElement("button");
         closeButton.textContent = "ปิดสแกนเนอร์";
         closeButton.className = "btn btn-danger mt-2";
         closeButton.onclick = stopScanner;
         qrScannerContainer.appendChild(closeButton);
       }
+
       function stopScanner() {
         if (scanner) {
           scanner
@@ -600,6 +580,7 @@
             .catch((error) => console.error("Error stopping scanner:", error));
         }
       }
+
       function handleFileUpload(event) {
         const file = event.target.files[0];
         if (file) {
@@ -612,17 +593,8 @@
               canvas.height = img.height;
               const ctx = canvas.getContext("2d");
               ctx.drawImage(img, 0, 0, img.width, img.height);
-              const imageData = ctx.getImageData(
-                0,
-                0,
-                canvas.width,
-                canvas.height
-              );
-              const code = jsQR(
-                imageData.data,
-                imageData.width,
-                imageData.height
-              );
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(imageData.data, imageData.width, imageData.height);
               if (code) {
                 onScanSuccess(code.data);
               } else {
@@ -638,14 +610,17 @@
           reader.readAsDataURL(file);
         }
       }
+
       function onScanSuccess(decodedText) {
         document.getElementById("textBox2").value = decodedText;
         showScanResult(decodedText);
         document.getElementById("qr-reader").style.display = "none";
       }
+
       function onScanError(error) {
         console.warn(`QR error: ${error}`);
       }
+
       function showCameraAccessInstructions() {
         Swal.fire({
           icon: "info",
@@ -662,6 +637,7 @@
           `,
         });
       }
+
       function showScanResult(value) {
         Swal.fire({
           icon: "success",
@@ -671,11 +647,11 @@
           showConfirmButton: false,
         });
       }
+
       function showScanError(error) {
         let errorMessage = "เกิดข้อผิดพลาดในการสแกน QR code";
         if (error.name === "NotAllowedError") {
-          errorMessage =
-            "ไม่ได้รับอนุญาตให้เข้าถึงกล้อง กรุณาอนุญาตการเข้าถึงกล้องเพื่อสแกน QR code";
+          errorMessage = "ไม่ได้รับอนุญาตให้เข้าถึงกล้อง กรุณาอนุญาตการเข้าถึงกล้องเพื่อสแกน QR code";
         } else if (error.name === "NotFoundError") {
           errorMessage = "ไม่พบกล้องบนอุปกรณ์นี้";
         }
@@ -685,6 +661,7 @@
           text: errorMessage,
         });
       }
+
       function saveToSupabase() {
         const flexJson = document.getElementById("textBox2").value;
         const title = document.getElementById("textBox1").value;
@@ -716,7 +693,6 @@
           userId: profile.userId,
           displayName: profile.displayName,
         };
-        // แสดง loading
         Swal.fire({
           title: "กำลังบันทึกข้อมูล...",
           allowOutsideClick: false,
@@ -724,20 +700,16 @@
             Swal.showLoading();
           },
         });
-        // ส่งข้อมูลไปยัง Supabase Edge Function
-        fetch(SAVE_FUNCTION, {
+        fetch(SUPABASE_FUNCTIONS_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify(data),
         })
           .then((response) => {
             if (!response.ok) {
-              throw new Error(
-                "Network response was not ok: " + response.statusText
-              );
+              throw new Error("Network response was not ok: " + response.statusText);
             }
             return response.json();
           })
@@ -764,8 +736,8 @@
             });
           });
       }
+
       function isValidFlexMessage(obj) {
-        // ตรวจสอบว่าเป็น Flex Message ที่ถูกต้อง
         return (
           obj &&
           (obj.type === "flex" ||
@@ -773,33 +745,43 @@
             (obj.type === "carousel" && Array.isArray(obj.contents)))
         );
       }
+
       function fetchDataList() {
-        fetch(`${LIST_FUNCTION}?userId=${profile.userId}`, {
+        if (!profile || !profile.userId) {
+          console.warn("Profile not loaded yet, skipping fetchDataList");
+          return;
+        }
+        fetch(`${SUPABASE_FUNCTIONS_URL}?userId=${encodeURIComponent(profile.userId)}`, {
           method: "GET",
           headers: {
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
           },
         })
-          .then((response) => response.json())
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("Network response was not ok: " + response.statusText);
+            }
+            return response.json();
+          })
           .then((data) => {
             if (!Array.isArray(data)) {
               throw new Error("Data is not an array");
             }
             const listHtml = data
-              .map((item, index) => {
-                const title = escapeHtml((item && item.title) || "");
+              .map((item) => {
+                const title = escapeHtml(item.title || "");
                 return `
-          <div class="card" id="item-${item.id}">
-            <div class="card-body">
-              <h5 class="card-title">${title}</h5>
-              <div class="btn-group">
-                <button class="btn btn-sm btn-primary" onclick="shareListItem('${item.id}')">แชร์</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteListItem('${item.id}')">ลบ</button>
-                <button class="btn btn-sm btn-info" onclick="showFlexMessage('${item.id}')">แสดง</button>
-              </div>
-            </div>
-          </div>
-        `;
+                  <div class="card" id="item-${item.id}">
+                    <div class="card-body">
+                      <h5 class="card-title">${title}</h5>
+                      <div class="btn-group">
+                        <button class="btn btn-sm btn-primary" onclick="shareListItem('${item.id}')">แชร์</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteListItem('${item.id}')">ลบ</button>
+                        <button class="btn btn-sm btn-info" onclick="showFlexMessage('${item.id}')">แสดง</button>
+                      </div>
+                    </div>
+                  </div>
+                `;
               })
               .join("");
             const dataListElement = document.getElementById("dataList");
@@ -815,19 +797,23 @@
             const dataListElement = document.getElementById("dataList");
             if (dataListElement) {
               dataListElement.innerHTML = `<p class="text-danger">Error loading data: ${error.message}</p>`;
-            } else {
-              console.error("Element with id 'dataList' not found");
             }
           });
       }
+
       function deleteItemFromServer(id) {
-        return fetch(`${DELETE_FUNCTION}?id=${id}`, {
+        return fetch(`${SUPABASE_FUNCTIONS_URL}?id=${encodeURIComponent(id)}`, {
           method: "DELETE",
           headers: {
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
           },
         })
-          .then((response) => response.json())
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("Network response was not ok: " + response.statusText);
+            }
+            return response.json();
+          })
           .then((data) => {
             if (!data.success) {
               throw new Error(data.error || "Unknown error occurred");
@@ -835,6 +821,7 @@
             return data;
           });
       }
+
       function showFlexMessage(id) {
         const item = window.listData.find(item => item.id === id);
         if (item && item.text1) {
@@ -862,13 +849,11 @@
                 if (typeof flex2html === "function") {
                   flex2html("flex1", flexMessage);
                   flexContainer.style.display = "block";
-                  // ลบ class ที่อาจทำให้เกิดพื้นหลังสีขาว
                   flexContainer.classList.remove("bg-white", "p-2", "rounded");
                   flexContainer.scrollIntoView({ behavior: "smooth" });
                 } else {
                   console.error("flex2html function is not available");
-                  flexContainer.innerHTML =
-                    '<p class="text-danger">flex2html library is not loaded properly.</p>';
+                  flexContainer.innerHTML = '<p class="text-danger">flex2html library is not loaded properly.</p>';
                 }
               } else {
                 console.error("Flex container not found");
@@ -893,6 +878,7 @@
           });
         }
       }
+
       function deleteListItem(id) {
         Swal.fire({
           title: "คุณแน่ใจหรือไม่?",
@@ -916,7 +902,7 @@
             deleteItemFromServer(id)
               .then(() => {
                 Swal.fire("ลบแล้ว!", "รายการได้ถูกลบเรียบร้อยแล้ว", "success");
-                fetchDataList(); // โหลดรายการใหม่หลังจากลบ
+                fetchDataList();
               })
               .catch((error) => {
                 console.error("Error deleting item:", error);
@@ -929,7 +915,7 @@
           }
         });
       }
-      // Helper function to escape HTML
+
       function escapeHtml(unsafe) {
         if (typeof unsafe !== "string") {
           return "";
@@ -941,12 +927,12 @@
           .replace(/"/g, "&quot;")
           .replace(/'/g, "&#039;");
       }
+
       function shareListItem(id) {
         const item = window.listData.find(item => item.id === id);
         if (item && item.text1) {
           try {
             let flexObj = JSON.parse(item.text1);
-            // ตรวจสอบโครงสร้างของ Flex message
             if (
               flexObj &&
               (flexObj.type === "flex" ||
@@ -984,6 +970,7 @@
           });
         }
       }
+
       function sendMessage(messageObj) {
         if (liff.isApiAvailable("shareTargetPicker")) {
           liff
@@ -1012,25 +999,19 @@
           });
         }
       }
+
       function clearInputs() {
-        // ตรวจสอบว่า elements มีอยู่จริงก่อนที่จะกำหนดค่า
         const textBox1 = document.getElementById("textBox1");
         const textBox2 = document.getElementById("textBox2");
-        if (textBox1) {
-          textBox1.value = "";
-        }
-        if (textBox2) {
-          textBox2.value = "";
-        }
+        if (textBox1) textBox1.value = "";
+        if (textBox2) textBox2.value = "";
       }
-      // ฟังก์ชันเพื่อแปลง HTML entities กลับเป็นตัวอักษรปกติ
+
       function decodeHtml(html) {
-        var txt = document.createElement("textarea");
+        const txt = document.createElement("textarea");
         txt.innerHTML = html;
         return txt.value;
       }
-      // โหลดรายการข้อมูลเมื่อเปิดหน้าเว็บ
-      fetchDataList();
     </script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.3.1/dist/jsQR.min.js"></script>
