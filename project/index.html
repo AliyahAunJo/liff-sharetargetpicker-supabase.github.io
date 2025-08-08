@@ -249,6 +249,7 @@
       const liffId = "2005780370-YvW3r1L7";
       const SUPABASE_FUNCTIONS_URL = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/submit-liff-shartargetpicker';
       let profile;
+      window.listData = window.listData || [];
 
       liff
         .init({ liffId })
@@ -722,7 +723,7 @@
             Swal.showLoading();
           },
         });
-        console.log("Sending POST to:", SUPABASE_FUNCTIONS_URL, "with data:", data);
+        console.log("Saving data:", data);
         fetch(SUPABASE_FUNCTIONS_URL, {
           method: "POST",
           headers: {
@@ -731,7 +732,6 @@
           body: JSON.stringify(data),
         })
           .then((response) => {
-            console.log("Response status:", response.status, "OK:", response.ok);
             if (!response.ok) {
               return response.text().then((text) => {
                 throw new Error(`Network response was not ok: ${response.status} ${text}`);
@@ -740,7 +740,7 @@
             return response.json();
           })
           .then((result) => {
-            console.log("Response data:", result);
+            console.log("Save response:", result);
             if (result.success) {
               Swal.fire({
                 icon: "success",
@@ -755,7 +755,7 @@
             }
           })
           .catch((error) => {
-            console.error("Fetch error:", error);
+            console.error("Error saving data:", error);
             Swal.fire({
               icon: "error",
               title: "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
@@ -764,76 +764,164 @@
           });
       }
 
-      function fetchDataList() {
+      async function fetchDataList(retryCount = 0, maxRetries = 3) {
         if (!profile || !profile.userId) {
           console.warn("Profile not loaded yet, skipping fetchDataList");
           return;
         }
-        console.log("Fetching data from:", `${SUPABASE_FUNCTIONS_URL}?userId=${encodeURIComponent(profile.userId)}`);
-        fetch(`${SUPABASE_FUNCTIONS_URL}?userId=${encodeURIComponent(profile.userId)}`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        })
-          .then((response) => {
-            console.log("Fetch list response status:", response.status);
-            if (!response.ok) {
-              return response.text().then((text) => {
-                throw new Error(`Network response was not ok: ${response.status} ${text}`);
-              });
-            }
-            return response.json();
-          })
-          .then((data) => {
-            console.log("Fetched data:", data);
-            if (!Array.isArray(data)) {
-              throw new Error("Data is not an array");
-            }
-            const listHtml = data
-              .map((item) => {
-                const title = escapeHtml(item.title || "");
-                return `
-                  <div class="card" id="item-${item.id}">
-                    <div class="card-body">
-                      <h5 class="card-title">${title}</h5>
-                      <div class="btn-group">
-                        <button class="btn btn-sm btn-primary" onclick="shareListItem('${item.id}')">แชร์</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteListItem('${item.id}')">ลบ</button>
-                        <button class="btn btn-sm btn-info" onclick="showFlexMessage('${item.id}')">แสดง</button>
-                      </div>
+        console.log("Fetching data for userId:", profile.userId);
+        try {
+          const response = await fetch(`${SUPABASE_FUNCTIONS_URL}?userId=${encodeURIComponent(profile.userId)}`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Network response was not ok: ${response.status} ${text}`);
+          }
+          const data = await response.json();
+          console.log("Fetched data:", data);
+          if (!Array.isArray(data)) {
+            throw new Error("Data is not an array");
+          }
+          window.listData = data;
+          const listHtml = data
+            .map((item) => {
+              const title = escapeHtml(item.title || "");
+              return `
+                <div class="card" id="item-${item.id}">
+                  <div class="card-body">
+                    <h5 class="card-title">${title}</h5>
+                    <div class="btn-group">
+                      <button class="btn btn-sm btn-primary" onclick="shareListItem('${item.id}')">แชร์</button>
+                      <button class="btn btn-sm btn-danger" onclick="deleteListItem('${item.id}')">ลบ</button>
+                      <button class="btn btn-sm btn-info" onclick="showFlexMessage('${item.id}')">แสดง</button>
                     </div>
                   </div>
-                `;
-              })
-              .join("");
-            const dataListElement = document.getElementById("dataList");
-            if (dataListElement) {
-              dataListElement.innerHTML = listHtml || "<p>ไม่มีข้อมูล</p>";
-            } else {
-              console.error("Element with id 'dataList' not found");
-            }
-            window.listData = data;
-          })
-          .catch((error) => {
-            console.error("Error fetching data:", error);
+                </div>
+              `;
+            })
+            .join("");
+          const dataListElement = document.getElementById("dataList");
+          if (dataListElement) {
+            dataListElement.innerHTML = listHtml || "<p>ไม่มีข้อมูล</p>";
+          } else {
+            console.error("Element with id 'dataList' not found");
+          }
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          if (retryCount < maxRetries) {
+            console.log(`Retrying fetchDataList (${retryCount + 1}/${maxRetries})...`);
+            setTimeout(() => fetchDataList(retryCount + 1, maxRetries), 1000);
+          } else {
             const dataListElement = document.getElementById("dataList");
             if (dataListElement) {
               dataListElement.innerHTML = `<p class="text-danger">Error loading data: ${error.message}</p>`;
             }
+            Swal.fire({
+              icon: "error",
+              title: "ไม่สามารถโหลดข้อมูลได้",
+              text: "กรุณาลองรีเฟรชหน้าเว็บ",
+            });
+          }
+        }
+      }
+
+      function showFlexMessage(id) {
+        console.log("Showing Flex Message for id:", id, "listData:", window.listData);
+        if (!window.listData || !Array.isArray(window.listData)) {
+          console.warn("listData is not initialized, attempting to fetch...");
+          fetchDataList().then(() => {
+            showFlexMessage(id); // Retry after fetching
           });
+          return;
+        }
+        const item = window.listData.find(item => String(item.id) === String(id));
+        if (!item) {
+          console.error("showFlexMessage: Item not found for id:", id);
+          Swal.fire({
+            icon: "error",
+            title: "ไม่สามารถแสดงข้อมูลได้",
+            text: "ไม่พบรายการที่ร้องขอ กรุณารีเฟรชหน้าเว็บ",
+            confirmButtonText: "รีเฟรช",
+          }).then((result) => {
+            if (result.isConfirmed) {
+              fetchDataList();
+            }
+          });
+          return;
+        }
+        if (!item.text1) {
+          console.error("showFlexMessage: Missing text1 for item:", item);
+          Swal.fire({
+            icon: "error",
+            title: "ไม่สามารถแสดงข้อมูลได้",
+            text: "ข้อมูล Flex Message ไม่สมบูรณ์",
+          });
+          return;
+        }
+        try {
+          const flexObj = JSON.parse(item.text1);
+          if (
+            flexObj &&
+            (flexObj.type === "flex" ||
+              flexObj.type === "carousel" ||
+              flexObj.type === "bubble")
+          ) {
+            let flexMessage;
+            if (flexObj.type === "carousel" || flexObj.type === "bubble") {
+              flexMessage = {
+                type: "flex",
+                altText: item.title || "Flex Message",
+                contents: flexObj,
+              };
+            } else {
+              flexMessage = flexObj;
+            }
+            const flexContainer = document.getElementById("flex1");
+            if (flexContainer) {
+              flexContainer.innerHTML = "";
+              if (typeof flex2html === "function") {
+                flex2html("flex1", flexMessage);
+                flexContainer.style.display = "block";
+                flexContainer.classList.remove("bg-white", "p-2", "rounded");
+                flexContainer.scrollIntoView({ behavior: "smooth" });
+              } else {
+                console.error("flex2html function is not available");
+                flexContainer.innerHTML = '<p class="text-danger">flex2html library is not loaded properly.</p>';
+              }
+            } else {
+              console.error("Flex container not found");
+              Swal.fire({
+                icon: "error",
+                title: "ข้อผิดพลาด",
+                text: "ไม่พบคอนเทนเนอร์สำหรับแสดง Flex Message",
+              });
+            }
+          } else {
+            throw new Error("Invalid Flex message structure");
+          }
+        } catch (e) {
+          console.error("Error parsing or displaying Flex JSON:", e, "item:", item);
+          Swal.fire({
+            icon: "error",
+            title: "ไม่สามารถแสดง Flex message ได้",
+            text: `รูปแบบข้อมูลไม่ถูกต้อง: ${e.message}`,
+          });
+        }
       }
 
       function deleteItemFromServer(id) {
         console.log("Deleting item with id:", id);
-        return fetch(`${SUPABASE_FUNCTIONS_URL}?id=${encodeURIComponent(id)}`, {
+        return fetch(`${SUPABASE_FUNCTIONS_URL}?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(profile.userId)}`, {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
           },
         })
           .then((response) => {
-            console.log("Delete response status:", response.status);
             if (!response.ok) {
               return response.text().then((text) => {
                 throw new Error(`Network response was not ok: ${response.status} ${text}`);
@@ -842,69 +930,12 @@
             return response.json();
           })
           .then((data) => {
-            console.log("Delete response data:", data);
+            console.log("Delete response:", data);
             if (!data.success) {
               throw new Error(data.error || "Unknown error occurred");
             }
             return data;
           });
-      }
-
-      function showFlexMessage(id) {
-        const item = window.listData.find(item => item.id === id);
-        if (item && item.text1) {
-          try {
-            const flexObj = JSON.parse(item.text1);
-            if (
-              flexObj &&
-              (flexObj.type === "flex" ||
-                flexObj.type === "carousel" ||
-                flexObj.type === "bubble")
-            ) {
-              let flexMessage;
-              if (flexObj.type === "carousel" || flexObj.type === "bubble") {
-                flexMessage = {
-                  type: "flex",
-                  altText: item.title || "Flex Message",
-                  contents: flexObj,
-                };
-              } else {
-                flexMessage = flexObj;
-              }
-              const flexContainer = document.getElementById("flex1");
-              if (flexContainer) {
-                flexContainer.innerHTML = "";
-                if (typeof flex2html === "function") {
-                  flex2html("flex1", flexMessage);
-                  flexContainer.style.display = "block";
-                  flexContainer.classList.remove("bg-white", "p-2", "rounded");
-                  flexContainer.scrollIntoView({ behavior: "smooth" });
-                } else {
-                  console.error("flex2html function is not available");
-                  flexContainer.innerHTML = '<p class="text-danger">flex2html library is not loaded properly.</p>';
-                }
-              } else {
-                console.error("Flex container not found");
-              }
-            } else {
-              throw new Error("Invalid Flex message structure");
-            }
-          } catch (e) {
-            console.error("Error parsing or displaying Flex JSON:", e);
-            Swal.fire({
-              icon: "error",
-              title: "ไม่สามารถแสดง Flex message ได้",
-              text: "รูปแบบข้อมูลไม่ถูกต้อง: " + e.message,
-            });
-          }
-        } else {
-          console.error("showFlexMessage: Invalid item or missing Flex data");
-          Swal.fire({
-            icon: "error",
-            title: "ไม่สามารถแสดงข้อมูลได้",
-            text: "ข้อมูลไม่ถูกต้องหรือไม่สมบูรณ์",
-          });
-        }
       }
 
       function deleteListItem(id) {
@@ -957,44 +988,66 @@
       }
 
       function shareListItem(id) {
-        const item = window.listData.find(item => item.id === id);
-        if (item && item.text1) {
-          try {
-            let flexObj = JSON.parse(item.text1);
-            if (
-              flexObj &&
-              (flexObj.type === "flex" ||
-                flexObj.type === "carousel" ||
-                flexObj.type === "bubble")
-            ) {
-              let messageObj;
-              if (flexObj.type === "carousel" || flexObj.type === "bubble") {
-                messageObj = {
-                  type: "flex",
-                  altText: item.title || "Flex Message",
-                  contents: flexObj,
-                };
-              } else {
-                messageObj = flexObj;
-              }
-              sendMessage(messageObj);
-            } else {
-              throw new Error("Invalid Flex message structure");
-            }
-          } catch (e) {
-            console.error("Error parsing or sending Flex JSON:", e);
-            Swal.fire({
-              icon: "error",
-              title: "ไม่สามารถส่ง Flex message ได้",
-              text: "รูปแบบข้อมูลไม่ถูกต้อง: " + e.message,
-            });
-          }
-        } else {
-          console.error("shareListItem: Invalid item or missing Flex data");
+        console.log("Sharing item with id:", id);
+        if (!window.listData || !Array.isArray(window.listData)) {
+          console.warn("listData is not initialized, attempting to fetch...");
+          fetchDataList().then(() => {
+            shareListItem(id); // Retry after fetching
+          });
+          return;
+        }
+        const item = window.listData.find(item => String(item.id) === String(id));
+        if (!item) {
+          console.error("shareListItem: Item not found for id:", id);
           Swal.fire({
             icon: "error",
             title: "ไม่สามารถแชร์ข้อมูลได้",
-            text: "ข้อมูลไม่ถูกต้องหรือไม่สมบูรณ์",
+            text: "ไม่พบรายการที่ร้องขอ กรุณารีเฟรชหน้าเว็บ",
+            confirmButtonText: "รีเฟรช",
+          }).then((result) => {
+            if (result.isConfirmed) {
+              fetchDataList();
+            }
+          });
+          return;
+        }
+        if (!item.text1) {
+          console.error("shareListItem: Missing text1 for item:", item);
+          Swal.fire({
+            icon: "error",
+            title: "ไม่สามารถแชร์ข้อมูลได้",
+            text: "ข้อมูล Flex Message ไม่สมบูรณ์",
+          });
+          return;
+        }
+        try {
+          let flexObj = JSON.parse(item.text1);
+          if (
+            flexObj &&
+            (flexObj.type === "flex" ||
+              flexObj.type === "carousel" ||
+              flexObj.type === "bubble")
+          ) {
+            let messageObj;
+            if (flexObj.type === "carousel" || flexObj.type === "bubble") {
+              messageObj = {
+                type: "flex",
+                altText: item.title || "Flex Message",
+                contents: flexObj,
+              };
+            } else {
+              messageObj = flexObj;
+            }
+            sendMessage(messageObj);
+          } else {
+            throw new Error("Invalid Flex message structure");
+          }
+        } catch (e) {
+          console.error("Error parsing or sending Flex JSON:", e, "item:", item);
+          Swal.fire({
+            icon: "error",
+            title: "ไม่สามารถส่ง Flex message ได้",
+            text: `รูปแบบข้อมูลไม่ถูกต้อง: ${e.message}`,
           });
         }
       }
@@ -1033,12 +1086,6 @@
         const textBox2 = document.getElementById("textBox2");
         if (textBox1) textBox1.value = "";
         if (textBox2) textBox2.value = "";
-      }
-
-      function decodeHtml(html) {
-        const txt = document.createElement("textarea");
-        txt.innerHTML = html;
-        return txt.value;
       }
     </script>
     <script src="https://unpkg.com/html5-qrcode"></script>
