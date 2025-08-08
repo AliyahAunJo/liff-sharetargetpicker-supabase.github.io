@@ -259,12 +259,26 @@
               document.getElementById("pictureUrl").src = profile.pictureUrl;
               document.getElementById("displayName").textContent = `สวัสดี: ${profile.displayName}`;
               fetchDataList();
-            }).catch(console.error);
+            }).catch((err) => {
+              console.error("Error getting LINE profile:", err);
+              Swal.fire({
+                icon: "error",
+                title: "ไม่สามารถดึงข้อมูลโปรไฟล์ได้",
+                text: err.message,
+              });
+            });
           } else {
             liff.login();
           }
         })
-        .catch(console.error);
+        .catch((err) => {
+          console.error("LIFF initialization failed:", err);
+          Swal.fire({
+            icon: "error",
+            title: "ไม่สามารถเริ่มต้น LIFF ได้",
+            text: err.message,
+          });
+        });
 
       function toggleMessageDisplay(elementId) {
         const element = document.getElementById(elementId);
@@ -663,6 +677,14 @@
       }
 
       function saveToSupabase() {
+        if (!profile || !profile.userId) {
+          Swal.fire({
+            icon: "error",
+            title: "โปรไฟล์ยังไม่โหลด",
+            text: "กรุณารอสักครู่แล้วลองใหม่",
+          });
+          return;
+        }
         const flexJson = document.getElementById("textBox2").value;
         const title = document.getElementById("textBox1").value;
         if (!title.trim()) {
@@ -700,6 +722,7 @@
             Swal.showLoading();
           },
         });
+        console.log("Sending POST to:", SUPABASE_FUNCTIONS_URL, "with data:", data);
         fetch(SUPABASE_FUNCTIONS_URL, {
           method: "POST",
           headers: {
@@ -708,12 +731,16 @@
           body: JSON.stringify(data),
         })
           .then((response) => {
+            console.log("Response status:", response.status, "OK:", response.ok);
             if (!response.ok) {
-              throw new Error("Network response was not ok: " + response.statusText);
+              return response.text().then((text) => {
+                throw new Error(`Network response was not ok: ${response.status} ${text}`);
+              });
             }
             return response.json();
           })
           .then((result) => {
+            console.log("Response data:", result);
             if (result.success) {
               Swal.fire({
                 icon: "success",
@@ -728,7 +755,7 @@
             }
           })
           .catch((error) => {
-            console.error("Error:", error);
+            console.error("Fetch error:", error);
             Swal.fire({
               icon: "error",
               title: "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
@@ -737,20 +764,12 @@
           });
       }
 
-      function isValidFlexMessage(obj) {
-        return (
-          obj &&
-          (obj.type === "flex" ||
-            (obj.type === "bubble" && obj.body) ||
-            (obj.type === "carousel" && Array.isArray(obj.contents)))
-        );
-      }
-
       function fetchDataList() {
         if (!profile || !profile.userId) {
           console.warn("Profile not loaded yet, skipping fetchDataList");
           return;
         }
+        console.log("Fetching data from:", `${SUPABASE_FUNCTIONS_URL}?userId=${encodeURIComponent(profile.userId)}`);
         fetch(`${SUPABASE_FUNCTIONS_URL}?userId=${encodeURIComponent(profile.userId)}`, {
           method: "GET",
           headers: {
@@ -758,12 +777,16 @@
           },
         })
           .then((response) => {
+            console.log("Fetch list response status:", response.status);
             if (!response.ok) {
-              throw new Error("Network response was not ok: " + response.statusText);
+              return response.text().then((text) => {
+                throw new Error(`Network response was not ok: ${response.status} ${text}`);
+              });
             }
             return response.json();
           })
           .then((data) => {
+            console.log("Fetched data:", data);
             if (!Array.isArray(data)) {
               throw new Error("Data is not an array");
             }
@@ -802,6 +825,7 @@
       }
 
       function deleteItemFromServer(id) {
+        console.log("Deleting item with id:", id);
         return fetch(`${SUPABASE_FUNCTIONS_URL}?id=${encodeURIComponent(id)}`, {
           method: "DELETE",
           headers: {
@@ -809,12 +833,16 @@
           },
         })
           .then((response) => {
+            console.log("Delete response status:", response.status);
             if (!response.ok) {
-              throw new Error("Network response was not ok: " + response.statusText);
+              return response.text().then((text) => {
+                throw new Error(`Network response was not ok: ${response.status} ${text}`);
+              });
             }
             return response.json();
           })
           .then((data) => {
+            console.log("Delete response data:", data);
             if (!data.success) {
               throw new Error(data.error || "Unknown error occurred");
             }
